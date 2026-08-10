@@ -7,3 +7,4 @@ pymupdf==1.28.2
 pinecone==9.1.0
 sentence-transformers==5.7.0
 fastapi==0.141.1
+pandas==3.0.5
