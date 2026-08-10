@@ -15,8 +15,6 @@ class RAGRetriever:
         if partner_id:
             filter = {"partner_id": partner_id}
 
-        results = self.vector_store.search(
-            query_embedding=query_embedding, top_k=top_k, filter=filter
-        )
+        results = self.vector_store.search(query_embedding=query_embedding, top_k=top_k, filter=filter)
 
         return results

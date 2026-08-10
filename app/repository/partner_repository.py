@@ -1,7 +1,15 @@
+"""
+This is a temporary repository for partner data. It loads data from CSV files and provides methods to access and search the data.
+The repository is initialized with a data directory where the CSV files are located. The following CSV files
+are expected in the data directory:
+- partner_master.csv: Contains the master data for partners.
+- partner_capabilities.csv: Contains the capabilities of partners.
+- partner_programs.csv: Contains the programs that partners are enrolled in.
+- partner_classifications.csv: Contains the classifications of partners.
+The repository provides methods to get partner details, capabilities, programs, classifications, and to search partners
+"""
 import os
-
 import pandas as pd
-
 
 class PartnerRepository:
 
