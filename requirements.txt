@@ -3,3 +3,6 @@ snowflake-connector-python==4.7.1
 python-dotenv==1.2.2
 reportlab==5.0.0
 uvicorn==0.52.1
+pymupdf==1.28.2
+pinecone==9.1.0
+sentence-transformers==5.7.0
