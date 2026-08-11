@@ -56,7 +56,8 @@ with st.sidebar:
     st.subheader("Demo Questions")
     for question in DEMO_QUESTIONS:
         if st.button(question, use_container_width=True):
-            st.session_state["messages"].append({"role": "user", "content": question})
+            st.session_state["chat_input"] = question
+            st.rerun()
 
     if st.button("Reset conversation", use_container_width=True):
         reset_conversation()
@@ -69,7 +70,10 @@ for message in st.session_state["messages"]:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-prompt = st.chat_input("Ask about partners, growth, or market momentum...")
+prompt = st.chat_input(
+        "Ask about partners, growth, or market momentum...",
+        key="chat_input",
+    )
 
 if prompt:
     st.session_state["messages"].append({"role": "user", "content": prompt})
@@ -91,6 +95,7 @@ if prompt:
             if orchestrator.last_cache_hit
             else "cache miss (fresh computation)"
         )
+        cache_stats= "cache miss (fresh computation)"
 
         st.caption(f"Route: {route_text} | {cache_status}")
 

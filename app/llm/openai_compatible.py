@@ -33,7 +33,8 @@ class OpenAICompatibleProvider(LLMProvider):
         max_tokens: int | None = None,
         json_mode: bool = False,
         tools: list[dict] | None = None,
-    ) -> str:
+        tool_choice: str | None = None, 
+        ) -> str:
         kwargs = {
             "model": self.chat_model,
             "messages": [m.to_dict() if hasattr(m, "to_dict") else m for m in messages],
@@ -48,10 +49,18 @@ class OpenAICompatibleProvider(LLMProvider):
 
         if tools:
             kwargs["tools"] = tools
+            if tool_choice is not None:
+                kwargs["tool_choice"] = tool_choice
 
         response = self.client.chat.completions.create(**kwargs)
+        message = response.choices[0].message
 
-        return response.choices[0].message.content or ""
+        # Return the raw message when tools were offered on THIS call,
+        # since callers need .tool_calls. Otherwise return plain text.
+        if tools and tool_choice != "none":
+            return message
+
+        return message.content or ""
 
     def embed(self, text: str) -> list[float]:
         return self.embed_many([text])[0]

@@ -15,7 +15,9 @@ class PartnerGrowthAgent(BaseAgent):
         self.max_profiles = 10
 
     async def _gather_data(self, client: MCPClient) -> list[dict]:
-        search_result = await self._call_mcp(client, "search_partners", {"status": "Active"})
+        search_result = await self._call_mcp(
+            client, "search_partners", {"status": "Active"}
+        )
         return search_result
 
     def _score_partner(self, record: dict) -> dict:
@@ -73,45 +75,92 @@ class PartnerGrowthAgent(BaseAgent):
             "employees": employees,
             "signals": signals,
         }
-
+    
     async def run(self, question: str) -> str:
         async with MCPClient(self.mcp_url) as client:
-            records = await self._gather_data(client)
+            tools = await client.list_tools()
+            llm_tools = client.to_llm_tools(tools)
 
-        if not records:
-            return "No active partner records found."
+            system_prompt = self._system_prompt(
+                "You are the Partner Growth Agent.\n\n"
+                "Your job is to answer questions about which partners are "
+                "most likely to grow, should be recruited, deserve investment, "
+                "or about a specific partner's growth.\n\n"
+                "You have access to MCP tools that provide partner data. "
+                "Choose the most appropriate tool based on the user's question.\n\n"
+                "Use the structured partner tools when the question requires "
+                "partner attributes, revenue, employees, capabilities, "
+                "certifications, partner tier, vendor programs, status, or "
+                "other structured partner information.\n\n"
+                "Use the partner document search tool when the question asks "
+                "about information contained in partner documents or PDFs.\n\n"
+                "Do not invent figures or facts. Only use information returned "
+                "by the selected tool.\n\n"
+                "If the available data does not contain enough information to "
+                "answer the question, say so clearly."
+            )
+            print(f"USER QUESTION: {question}")
 
-        # scored = [self._score_partner(record) for record in records]
-        # scored.sort(key=lambda x: x["score"], reverse=True)
+            messages = [system_prompt, self._chat_user(question)]
 
-        scored_output = json.dumps(records, indent=2, default=str)
+            MAX_TOOL_HOPS = 20
 
-        system_prompt = self._system_prompt(
-            "You are the Partner Growth Agent. The user asked a "
-            "question about 'which partners are most likely to grow, should "
-            "be recruited, or deserve investment ?' or which partner's growth.\n\n"
-            "A deterministic scoring heuristic has already ranked the "
-            "partners based on revenue, headcount, capability proficiency, "
-            "certifications, partner tier, and vendor-program reach.\n\n"
-            "Your job: turn the ranked data below into a concise, "
-            "natural-language answer that (1) states the top candidates, "
-            "(2) cites the concrete numbers behind each recommendation "
-            "(revenue, employees, tier, capabilities, certifications), and "
-            "(3) is explicit that 'growth potential' is inferred from "
-            "current profile signals, not historical growth data.\n\n"
-            "Do not invent figures. Only cite values present in the data.\n\n"
-            "Ranked partners data:\n" + scored_output
-        )
+            for _ in range(MAX_TOOL_HOPS):
+                print(f"Tool request iteration {_ + 1} for question: {question}")
+                response = self.llm.chat(messages, temperature=0.0, tools=llm_tools)
 
-        answer = self.llm.chat(
-            [system_prompt, self._chat_user(question)],
-            temperature=0.0,
-        )
+                if not response.tool_calls:
+                    answer = response.content or "I could not determine an answer."
+                    self._store_answer(answer, question)
+                    return answer
 
-        self._store_answer(answer, question)
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.content or "",
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                            for tc in response.tool_calls
+                        ],
+                    }
+                )
 
-        return answer
+                # Execute EVERY tool call the model made, not just [0]
+                for tc in response.tool_calls:
+                    tool_name = tc.function.name
+                    arguments = json.loads(tc.function.arguments)
 
+                    print(f"TOOL CALLED: {tool_name}")
+                    print(f"ARGUMENTS: {arguments}")
+
+                    tool_result = await self._call_mcp(client, tool_name, arguments)
+
+                    print(f"TOOL RESULT: {json.dumps(tool_result, default=str)}")
+
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(tool_result, default=str),
+                        }
+                    )
+
+            # Hit MAX_TOOL_HOPS — force a final text-only answer
+            final_response = self.llm.chat(
+                messages, temperature=0.0, tools=llm_tools, tool_choice="none"
+            )
+            answer = final_response or "I could not determine an answer."
+            self._store_answer(answer, question)
+            print("*"*40)
+            return answer
+        
     def _chat_user(self, question):
         from app.llm.provider import ChatMessage
 
