@@ -15,21 +15,7 @@ class PartnerGrowthAgent(BaseAgent):
         self.max_profiles = 10
 
     async def _gather_data(self, client: MCPClient) -> list[dict]:
-        search_result = await self._call_mcp(
-            client,
-            "search_partners",
-            {"status": "Active"},
-        )
-
-        # for record in search_result[: self.max_profiles]:
-        #     profile = await self._call_mcp(
-        #         client,
-        #         "get_partner_profile",
-        #         {"partner_id": record["partner_id"]},
-        #     )
-
-        #     record["_profile"] = profile
-
+        search_result = await self._call_mcp(client, "search_partners", {"status": "Active"})
         return search_result
 
     def _score_partner(self, record: dict) -> dict:

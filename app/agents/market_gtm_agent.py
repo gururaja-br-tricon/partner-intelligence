@@ -15,24 +15,8 @@ class MarketGtmAgent(BaseAgent):
         self.max_profiles = 10
 
     async def _gather_data(self, client: MCPClient) -> list[dict]:
-        search_result = await self._call_mcp(
-            client,
-            "search_partners",
-            {},
-        )
-
-        records = search_result
-
-        # for record in search_result[: self.max_profiles]:
-        #     profile = await self._call_mcp(
-        #         client,
-        #         "get_partner_profile",
-        #         {"partner_id": record["partner_id"]},
-        #     )
-
-        #     record["_profile"] = profile
-
-        return records
+        search_result = await self._call_mcp( client, "search_partners", {})
+        return search_result
 
     def _aggregate(self, records: list[dict]) -> dict:
         regions: dict[str, dict] = {}
@@ -54,16 +38,12 @@ class MarketGtmAgent(BaseAgent):
                 proficiency = capability.get("proficiency_level", "")
                 weight = PROFICIENCY_RANK.get(proficiency, 1)
 
-                technologies.setdefault(
-                    tech, {"partners": set(), "weighted": 0.0}
-                )
+                technologies.setdefault(tech, {"partners": set(), "weighted": 0.0})
                 technologies[tech]["partners"].add(partner.get("partner_id"))
                 technologies[tech]["weighted"] += weight
 
             if region:
-                regions.setdefault(
-                    region, {"partners": set(), "weighted": 0.0}
-                )
+                regions.setdefault(region, {"partners": set(), "weighted": 0.0})
                 regions[region]["partners"].add(partner.get("partner_id"))
 
                 vendor_count = len({p.get("vendor") for p in programs})

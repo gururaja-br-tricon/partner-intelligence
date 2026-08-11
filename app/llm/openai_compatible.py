@@ -32,6 +32,7 @@ class OpenAICompatibleProvider(LLMProvider):
         temperature: float = 0.0,
         max_tokens: int | None = None,
         json_mode: bool = False,
+        tools: list[dict] | None = None,
     ) -> str:
         kwargs = {
             "model": self.chat_model,
@@ -44,6 +45,9 @@ class OpenAICompatibleProvider(LLMProvider):
 
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
+
+        if tools:
+            kwargs["tools"] = tools
 
         response = self.client.chat.completions.create(**kwargs)
 

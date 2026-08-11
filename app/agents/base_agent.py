@@ -9,12 +9,7 @@ from app.utils import parse_concatenated
 class BaseAgent:
     name = "base"
 
-    def __init__(
-        self,
-        llm: LLMProvider,
-        mcp_url: str,
-        context: ContextBuilder | None = None,
-    ):
+    def __init__(self, llm: LLMProvider, mcp_url: str, context: ContextBuilder | None = None):
         self.llm = llm
         self.mcp_url = mcp_url
         self.context = context or ContextBuilder()
@@ -38,11 +33,7 @@ class BaseAgent:
     async def run(self, question: str) -> str:
         raise NotImplementedError
 
-    def _chat(
-        self,
-        messages,
-        json_mode: bool = False,
-    ) -> str:
+    def _chat(self, messages, json_mode: bool = False) -> str:
         return self.llm.chat(messages, temperature=0.0, json_mode=json_mode)
 
     def _system_prompt(self, agent_instructions: str) -> ChatMessage:

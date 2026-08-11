@@ -60,7 +60,15 @@ class MCPClient:
 
     async def list_tools(self):
         response = await self.session.list_tools()
-        return [t.name for t in response.tools]
+        return [
+        {
+            "name": tool.name,
+            "description": tool.description or "",
+            "input_schema": tool.inputSchema,
+        }
+        for tool in response.tools
+    ]
+        # return [t.name for t in response.tools]
 
     async def call_tool(
         self, name: str, arguments: dict | None = None
@@ -82,3 +90,17 @@ class MCPClient:
                 lines.append(str(item.text))
 
         return "\n".join(lines)
+
+    @staticmethod
+    def to_llm_tools(tools: list[dict]) -> list[dict]:
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "parameters": tool["input_schema"],
+                },
+            }
+            for tool in tools
+        ]
