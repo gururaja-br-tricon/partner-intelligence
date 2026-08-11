@@ -27,7 +27,7 @@ def search_partners(
     program_name: str | None = None,
     partner_tier: str | None = None,
     classification: str | None = None,
-) -> list[dict]:
+) -> dict:
     """
     Search structured partner data from Snowflake.
 
