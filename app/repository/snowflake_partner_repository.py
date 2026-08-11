@@ -1,5 +1,7 @@
+import json
 import os
 
+import numpy as np
 import snowflake.connector
 from dotenv import load_dotenv
 
@@ -8,6 +10,8 @@ load_dotenv()
 QUERY_LIMIT = 100
 
 class SnowflakePartnerRepository:
+
+    DOC_CHUNKS_TABLE = "PARTNER_DOC_CHUNKS"
 
     def __init__(self):
         self.connection = snowflake.connector.connect(
@@ -266,5 +270,118 @@ class SnowflakePartnerRepository:
                 }
                 for row in rows
             ]
+        finally:
+            cursor.close()
+
+    def ensure_doc_chunks_table(self):
+        query = f"""
+            CREATE TABLE IF NOT EXISTS {self.DOC_CHUNKS_TABLE} (
+                partner_id     VARCHAR(16),
+                chunk_index    INTEGER,
+                heading        VARCHAR(256),
+                text           VARCHAR,
+                embedding      ARRAY,
+                PRIMARY KEY (partner_id, chunk_index)
+            )
+        """
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(query)
+            self.connection.commit()
+        finally:
+            cursor.close()
+
+    def upsert_doc_chunks(self, chunks):
+        self.ensure_doc_chunks_table()
+
+        cursor = self.connection.cursor()
+        try:
+            for chunk in chunks:
+                embedding_json = json.dumps(chunk.embedding)
+
+                cursor.execute(
+                    f"""
+                    MERGE INTO {self.DOC_CHUNKS_TABLE} AS t
+                    USING (SELECT %s AS partner_id, %s AS chunk_index) AS s
+                    ON t.partner_id = s.partner_id AND t.chunk_index = s.chunk_index
+                    WHEN MATCHED THEN UPDATE SET
+                        heading = %s,
+                        text = %s,
+                        embedding = PARSE_JSON(%s)
+                    WHEN NOT MATCHED THEN INSERT (
+                        partner_id, chunk_index, heading, text, embedding
+                    ) VALUES (%s, %s, %s, %s, PARSE_JSON(%s))
+                    """,
+                    (
+                        chunk.partner_id,
+                        chunk.chunk_index,
+                        chunk.heading,
+                        chunk.text,
+                        embedding_json,
+                        chunk.partner_id,
+                        chunk.chunk_index,
+                        chunk.heading,
+                        chunk.text,
+                        embedding_json,
+                    ),
+                )
+
+            self.connection.commit()
+        finally:
+            cursor.close()
+
+    def fetch_all_doc_chunks(self):
+        cursor = self.connection.cursor(snowflake.connector.DictCursor)
+        try:
+            cursor.execute(
+                f"""
+                SELECT partner_id, chunk_index, heading, text, embedding
+                FROM {self.DOC_CHUNKS_TABLE}
+                """
+            )
+            rows = cursor.fetchall()
+
+            return [
+                {
+                    "partner_id": row["PARTNER_ID"],
+                    "chunk_index": row["CHUNK_INDEX"],
+                    "heading": row["HEADING"],
+                    "text": row["TEXT"],
+                    "embedding": row["EMBEDDING"],
+                }
+                for row in rows
+            ]
+        finally:
+            cursor.close()
+
+    def search_doc_chunks(self, query_embedding, top_k=5, threshold=0.0):
+        chunks = self.fetch_all_doc_chunks()
+
+        if not chunks:
+            return []
+
+        from app.rag.vector_store import cosine_similarity
+
+        vectors = [c["embedding"] for c in chunks]
+
+        scores = cosine_similarity(query_embedding, vectors)
+
+        ranked = sorted(
+            zip(chunks, scores), key=lambda item: item[1], reverse=True
+        )
+
+        results = [
+            {"chunk": c, "score": float(score)}
+            for c, score in ranked
+            if float(score) >= threshold
+        ]
+
+        return results[:top_k]
+
+    def count_doc_chunks(self):
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(f"SELECT COUNT(*) FROM {self.DOC_CHUNKS_TABLE}")
+            return cursor.fetchone()[0]
         finally:
             cursor.close()
