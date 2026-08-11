@@ -23,14 +23,14 @@ class MarketGtmAgent(BaseAgent):
 
         records = search_result
 
-        for record in search_result[: self.max_profiles]:
-            profile = await self._call_mcp(
-                client,
-                "get_partner_profile",
-                {"partner_id": record["partner_id"]},
-            )
+        # for record in search_result[: self.max_profiles]:
+        #     profile = await self._call_mcp(
+        #         client,
+        #         "get_partner_profile",
+        #         {"partner_id": record["partner_id"]},
+        #     )
 
-            record["_profile"] = profile
+        #     record["_profile"] = profile
 
         return records
 
@@ -100,7 +100,7 @@ class MarketGtmAgent(BaseAgent):
         data_output = json.dumps(aggregate, indent=2, default=str)
 
         system_prompt = self._system_prompt(
-            "You are the Market / GTM Agent for TCC. The user asked "
+            "You are the Market / GTM Agent. The user asked "
             "about which regions or technologies are gaining momentum.\n\n"
             "The aggregated data below is a static snapshot of current "
             "partner capability strength per region and per technology "

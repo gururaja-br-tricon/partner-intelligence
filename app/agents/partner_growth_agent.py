@@ -21,14 +21,14 @@ class PartnerGrowthAgent(BaseAgent):
             {"status": "Active"},
         )
 
-        for record in search_result[: self.max_profiles]:
-            profile = await self._call_mcp(
-                client,
-                "get_partner_profile",
-                {"partner_id": record["partner_id"]},
-            )
+        # for record in search_result[: self.max_profiles]:
+        #     profile = await self._call_mcp(
+        #         client,
+        #         "get_partner_profile",
+        #         {"partner_id": record["partner_id"]},
+        #     )
 
-            record["_profile"] = profile
+        #     record["_profile"] = profile
 
         return search_result
 
@@ -95,15 +95,15 @@ class PartnerGrowthAgent(BaseAgent):
         if not records:
             return "No active partner records found."
 
-        scored = [self._score_partner(record) for record in records]
-        scored.sort(key=lambda x: x["score"], reverse=True)
+        # scored = [self._score_partner(record) for record in records]
+        # scored.sort(key=lambda x: x["score"], reverse=True)
 
-        scored_output = json.dumps(scored, indent=2, default=str)
+        scored_output = json.dumps(records, indent=2, default=str)
 
         system_prompt = self._system_prompt(
-            "You are the Partner Growth Agent for TCC. The user asked a "
-            "question about which partners are most likely to grow, should "
-            "be recruited, or deserve investment.\n\n"
+            "You are the Partner Growth Agent. The user asked a "
+            "question about 'which partners are most likely to grow, should "
+            "be recruited, or deserve investment ?' or which partner's growth.\n\n"
             "A deterministic scoring heuristic has already ranked the "
             "partners based on revenue, headcount, capability proficiency, "
             "certifications, partner tier, and vendor-program reach.\n\n"
