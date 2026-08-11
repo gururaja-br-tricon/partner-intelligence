@@ -84,14 +84,14 @@ def search_partner_documents( query: str,partner_id: str | None = None,top_k: in
     Search partner PDF documents using semantic search.
 
     SOURCE:
-        pinecone
+        pinecone(RAG)
 
     Use this tool to retrieve information from
     partner documents and unstructured document content.
     """
 
     return {
-        "source": "pinecone",
+        "source": "pinecone(RAG)",
         "source_type": "unstructured",
         "tool": "search_partner_documents",
         "data": rag_context_builder.build_context(
