@@ -3,82 +3,26 @@ import json
 from app.agents.base_agent import BaseAgent
 from app.agents.mcp_client import MCPClient
 
-TIER_RANK = {"Silver": 1, "Gold": 2, "Platinum": 3}
-PROFICIENCY_RANK = {"Advanced": 2, "Expert": 3}
-
 
 class PartnerGrowthAgent(BaseAgent):
     name = "partner_growth"
 
+    TOOLS = [
+        "search_partners",
+        "get_partner_profile",
+        "search_partner_growth",
+        "find_partner_matches",
+        "explain_partner_match",
+        "search_partner_documents",
+    ]
+
     def __init__(self, llm, mcp_url, context=None):
         super().__init__(llm, mcp_url, context)
-        self.max_profiles = 10
 
-    async def _gather_data(self, client: MCPClient) -> list[dict]:
-        search_result = await self._call_mcp(
-            client, "search_partners", {"status": "Active"}
-        )
-        return search_result
-
-    def _score_partner(self, record: dict) -> dict:
-        profile = record.get("_profile") or {}
-        partner = profile.get("partner") or record
-
-        capabilities = profile.get("capabilities") or []
-        programs = profile.get("programs") or []
-        classifications = profile.get("classifications") or []
-
-        score = 0.0
-        signals = []
-
-        revenue = partner.get("annual_revenue") or 0
-        employees = partner.get("employee_count") or 0
-
-        revenue_factor = revenue / 200_000_000
-        score += min(revenue_factor, 1.0) * 1.0
-        signals.append(f"annual revenue ${revenue:,}")
-
-        employee_factor = employees / 1000
-        score += min(employee_factor, 1.0) * 0.5
-        signals.append(f"{employees:,} employees")
-
-        capabilities = capabilities if isinstance(capabilities, list) else []
-        programs = programs if isinstance(programs, list) else []
-
-        for capability in capabilities:
-            proficiency = capability.get("proficiency_level", "")
-            score += PROFICIENCY_RANK.get(proficiency, 0) * 0.15
-            certifications = capability.get("certification_count") or 0
-            score += min(certifications / 25, 1.0) * 0.15
-
-        max_tier = 0
-        for program in programs:
-            tier = TIER_RANK.get(program.get("partner_tier", ""), 0)
-            max_tier = max(max_tier, tier)
-
-        score += max_tier * 0.4
-        if max_tier:
-            signals.append(f"top partner tier reached")
-
-        vendor_count = len({p.get("vendor") for p in programs})
-        score += min(vendor_count, 3) * 0.3
-        signals.append(f"{vendor_count} vendor programs")
-
-        if len(classifications) > 1:
-            score += 0.1
-
-        return {
-            "partner_id": partner.get("partner_id"),
-            "partner_name": partner.get("partner_name"),
-            "score": round(score, 2),
-            "revenue": revenue,
-            "employees": employees,
-            "signals": signals,
-        }
-    
     async def run(self, question: str) -> str:
         async with MCPClient(self.mcp_url) as client:
             tools = await client.list_tools()
+            tools = [t for t in tools if t["name"] in self.TOOLS]
             llm_tools = client.to_llm_tools(tools)
 
             system_prompt = self._system_prompt(
@@ -88,16 +32,30 @@ class PartnerGrowthAgent(BaseAgent):
                 "or about a specific partner's growth.\n\n"
                 "You have access to MCP tools that provide partner data. "
                 "Choose the most appropriate tool based on the user's question.\n\n"
-                "Use the structured partner tools when the question requires "
-                "partner attributes, revenue, employees, capabilities, "
+                "Use search_partners and get_partner_profile when the question "
+                "requires partner attributes, revenue, employees, capabilities, "
                 "certifications, partner tier, vendor programs, status, or "
                 "other structured partner information.\n\n"
+                "Use search_partner_growth when the question asks about revenue "
+                "growth, pipeline growth, partner health, performance status, or "
+                "which partners are growing or declining.\n\n"
+                "Use find_partner_matches and explain_partner_match when the "
+                "question asks which partners fit a market or why a partner was "
+                "recommended.\n\n"
                 "Use the partner document search tool when the question asks "
                 "about information contained in partner documents or PDFs.\n\n"
                 "Do not invent figures or facts. Only use information returned "
                 "by the selected tool.\n\n"
-                "If the available data does not contain enough information to "
-                "answer the question, say so clearly."
+                "GUARDRAILS:\n"
+                "- If you do not know the answer or the tools returned no "
+                "relevant data, respond with exactly: \"I don't know\"\n"
+                "- Never guess, estimate, or fabricate data values. If a "
+                "calculation needs data (e.g. growth rate, revenue, counts) "
+                "that is missing, incomplete, or unavailable, do NOT compute "
+                "or estimate the number. Instead, state clearly which piece of "
+                "required data is missing and ask for it or say the data is "
+                "not available.\n"
+                "- Do not extrapolate beyond what the tools returned."
             )
             print(f"USER QUESTION: {question}")
 
@@ -110,7 +68,7 @@ class PartnerGrowthAgent(BaseAgent):
                 response = self.llm.chat(messages, temperature=0.0, tools=llm_tools)
 
                 if not response.tool_calls:
-                    answer = response.content or "I could not determine an answer."
+                    answer = response.content or "I don't know."
                     self._store_answer(answer, question)
                     return answer
 
@@ -156,7 +114,7 @@ class PartnerGrowthAgent(BaseAgent):
             final_response = self.llm.chat(
                 messages, temperature=0.0, tools=llm_tools, tool_choice="none"
             )
-            answer = final_response or "I could not determine an answer."
+            answer = final_response or "I don't know."
             self._store_answer(answer, question)
             print("*"*40)
             return answer
