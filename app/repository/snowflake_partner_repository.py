@@ -770,37 +770,48 @@ class SnowflakePartnerRepository:
         parameters = []
 
         if event_name:
-            parameters.append("EVENT_NAME = %s")
+            query += " AND EVENT_NAME = %s"
+            parameters.append(event_name)
 
         if region:
-            parameters.append("REGION = %s")
+            query += " AND REGION = %s"
+            parameters.append(region)
 
         if industry:
-            parameters.append("INDUSTRY = %s")
+            query += " AND INDUSTRY = %s"
+            parameters.append(industry)
 
         if technology:
-            parameters.append("TECHNOLOGY = %s")
+            query += " AND TECHNOLOGY = %s"
+            parameters.append(technology)
 
         if event_status:
-            parameters.append("EVENT_STATUS = %s")
+            query += " AND EVENT_STATUS = %s"
+            parameters.append(event_status)
 
         if event_date:
-            parameters.append("EVENT_DATE >= %s")
+            query += " AND EVENT_DATE >= %s"
+            parameters.append(event_date)
 
         if event_end_date:
-            parameters.append("EVENT_END_DATE <= %s")
+            query += " AND EVENT_END_DATE <= %s"
+            parameters.append(event_end_date)
 
         if event_type:
-            parameters.append("EVENT_TYPE = %s")
+            query += " AND EVENT_TYPE = %s"
+            parameters.append(event_type)
 
         if market_name:
-            parameters.append("MARKET_NAME = %s")
+            query += " AND MARKET_NAME = %s"
+            parameters.append(market_name)
 
         if country:
-            parameters.append("COUNTRY = %s")
+            query += " AND COUNTRY = %s"
+            parameters.append(country)
 
         if city:
-            parameters.append("CITY = %s")
+            query += " AND CITY = %s"
+            parameters.append(city)
 
         query += """
             ORDER BY event_date
@@ -873,7 +884,7 @@ class SnowflakePartnerRepository:
             parameters.append(participation_type)
 
         query += """
-            ORDER BY event_id, partner_name
+            ORDER BY EVENT_ID, PARTNER_ID
             LIMIT %s
         """
 
