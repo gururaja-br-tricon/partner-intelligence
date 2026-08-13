@@ -336,7 +336,7 @@ def search_events(
     event_status=None,
     event_date=None,
     event_end_date=None,
-    limit=100
+    limit=100,
 ) -> dict:
     """
     Search structured event data from Snowflake.
@@ -367,19 +367,19 @@ def search_events(
         "source_type": "structured",
         "tool": "search_events",
         "data": repository.search_events(
-    event_name=None,
-    event_type=None,
-    region=None,
-    country=None,
-    city=None,
-    industry=None,
-    market_name=None,
-    technology=None,
-    event_status=None,
-    event_date=None,
-    event_end_date=None,
-    limit=100
-)
+            event_name=event_name,
+            event_type=event_type,
+            region=region,
+            country=country,
+            city=city,
+            industry=industry,
+            market_name=market_name,
+            technology=technology,
+            event_status=event_status,
+            event_date=event_date,
+            event_end_date=event_end_date,
+            limit=limit,
+        ),
     }
 
 

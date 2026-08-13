@@ -7,7 +7,7 @@ load_dotenv()
 
 QUERY_LIMIT = 100
 
-DATABASE = "PARTNER_INTELLIGENCE_DB"
+DATABASE = os.getenv("SNOWFLAKE_DATABASE", "PARTNER_INTELLIGENCE_DB")
 # schemas
 PARTNER_SCHEMA = f"{DATABASE}.PARTNER_DATA"
 MARKET_SCHEMA = f"{DATABASE}.MARKET_DATA"
@@ -43,7 +43,6 @@ class SnowflakePartnerRepository:
             password=os.getenv("SNOWFLAKE_PASSWORD"),
             warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
             database=os.getenv("SNOWFLAKE_DATABASE"),
-            schema=os.getenv("SNOWFLAKE_SCHEMA"),
         )
 
     def close(self):
