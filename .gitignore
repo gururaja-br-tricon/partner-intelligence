@@ -8,3 +8,5 @@ app/rag/    # temporarily added
 .vscode/
 snowflake_export/
 data/market_gtm_event_data_prompt.md
+keys/
+.env.docker

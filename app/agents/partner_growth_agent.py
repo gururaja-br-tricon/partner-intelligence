@@ -76,8 +76,8 @@ class PartnerGrowthAgent(BaseAgent):
             "signals": signals,
         }
     
-    async def run(self, question: str) -> str:
-        async with MCPClient(self.mcp_url) as client:
+    async def run(self, question: str, jwt: str) -> str:
+        async with MCPClient(self.mcp_url, auth_token=jwt) as client:
             tools = await client.list_tools()
             llm_tools = client.to_llm_tools(tools)
 

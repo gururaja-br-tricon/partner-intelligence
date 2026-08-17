@@ -1,18 +1,43 @@
 import os
 
 from mcp.server import MCPServer
+from mcp.server.auth.settings import AuthSettings
 
+
+from app.auth.jwt_role_verifier import JWTRoleVerifier
+from app.auth.domains import Domain
+from app.auth.check_domain import check_domain
 from app.repository.partner_repository import PartnerRepository
 from app.repository.snowflake_partner_repository import SnowflakePartnerRepository
+from app.repository.snowflake_market_repository import SnowflakeMarketRepository
+from app.repository.snowflake_event_repository import SnowflakeEventRepository
+from app.repository.snowflake_gtm_repository import SnowflakeGTMRepository
 from app.rag.context import RAGContextBuilder
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data", "generated")
 
 # repository = PartnerRepository(DATA_DIR)
-repository = SnowflakePartnerRepository()
+partner_repository = SnowflakePartnerRepository()
+market_repository = SnowflakeMarketRepository()
+event_repository = SnowflakeEventRepository()
+gtm_repository = SnowflakeGTMRepository()
+
 rag_context_builder = RAGContextBuilder()
-mcp = MCPServer("partner-intelligence")
+
+mcp = MCPServer(
+    "partner-intelligence",
+    token_verifier=JWTRoleVerifier(),
+    auth=AuthSettings(
+        # Not a real OAuth issuer — we sign our own JWTs in login_api.py/
+        # chat_app.py and verify them ourselves in JWTRoleVerifier. Both
+        # URLs are only used for SDK metadata/discovery, required by the
+        # SDK's pydantic model even though unused in our flow.
+        issuer_url=os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8000"),
+        resource_server_url=os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8000")
+        + "/mcp",
+    ),
+)
 
 
 @mcp.tool()
@@ -41,11 +66,15 @@ def search_partners(
 
     """
 
+    denied = check_domain(Domain.PARTNER)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "search_partners",
-        "data": repository.search_partners(
+        "data": partner_repository.search_partners(
             headquarters_state=headquarters_state,
             headquarters_country=headquarters_country,
             industry=industry,
@@ -70,11 +99,15 @@ def get_partner_profile(partner_id: str) -> dict | None:
 
     Use this tool for structured partner information.
     """
+    denied = check_domain(Domain.PARTNER)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "get_partner_profile",
-        "data": repository.get_partner_profile(partner_id),
+        "data": partner_repository.get_partner_profile(partner_id),
     }
 
 
@@ -93,6 +126,10 @@ def search_partner_documents(
     Use this tool to retrieve information from
     partner documents and unstructured document content.
     """
+
+    denied = check_domain(Domain.PARTNER)
+    if denied:
+        return denied
 
     return {
         "source": "pinecone(RAG)",
@@ -163,11 +200,15 @@ def search_partner_growth(
         predictive data or a prediction score is explicitly provided.
     """
 
+    denied = check_domain(Domain.PARTNER)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "search_partner_growth",
-        "data": repository.search_partner_growth(
+        "data": partner_repository.search_partner_growth(
             min_revenue_growth_pct=min_revenue_growth_pct,
             min_pipeline_growth_pct=min_pipeline_growth_pct,
             min_health_score=min_health_score,
@@ -211,11 +252,15 @@ def search_markets(
         other analytical metrics.
     """
 
+    denied = check_domain(Domain.MARKET)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "search_markets",
-        "data": repository.search_markets(
+        "data": market_repository.search_markets(
             market_name=market_name,
             market_category=market_category,
             region=region,
@@ -258,11 +303,15 @@ def get_market_intelligence(
         market opportunities.
     """
 
+    denied = check_domain(Domain.MARKET)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "get_market_intelligence",
-        "data": repository.get_market_intelligence(
+        "data": market_repository.get_market_intelligence(
             market_id=market_id,
             region=region,
             country=country,
@@ -309,11 +358,15 @@ def compare_markets(
         competition, partner count, and opportunity count.
     """
 
+    denied = check_domain(Domain.MARKET)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "compare_markets",
-        "data": repository.compare_markets(
+        "data": market_repository.compare_markets(
             market_ids=market_ids,
             region=region,
             industry=industry,
@@ -325,18 +378,18 @@ def compare_markets(
 
 @mcp.tool()
 def search_events(
-    event_name=None,
-    event_type=None,
-    region=None,
-    country=None,
-    city=None,
-    industry=None,
-    market_name=None,
-    technology=None,
-    event_status=None,
-    event_date=None,
-    event_end_date=None,
-    limit=100,
+    event_name: str | None = None,
+    event_type: str | None = None,
+    region: str | None = None,
+    country: str | None = None,
+    city: str | None = None,
+    industry: str | None = None,
+    market_name: str | None = None,
+    technology: str | None = None,
+    event_status: str | None = None,
+    event_date: str | None = None,
+    event_end_date: str | None = None,
+    limit: int = 100,
 ) -> dict:
     """
     Search structured event data from Snowflake.
@@ -362,11 +415,15 @@ def search_events(
         and event objectives.
     """
 
+    denied = check_domain(Domain.EVENT)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "search_events",
-        "data": repository.search_events(
+        "data": event_repository.search_events(
             event_name=event_name,
             event_type=event_type,
             region=region,
@@ -385,10 +442,10 @@ def search_events(
 
 @mcp.tool()
 def get_event_participants(
-    event_id=None,
-    partner_id=None,
-    participation_type=None,
-    limit=100
+    event_id: str | None = None,
+    partner_id: str | None = None,
+    participation_type: str | None = None,
+    limit: int = 100,
 ) -> dict:
     """
     Retrieve structured event participation data from Snowflake.
@@ -415,16 +472,20 @@ def get_event_participants(
         and follow-up requirements.
     """
 
+    denied = check_domain(Domain.EVENT)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "get_event_participants",
-        "data": repository.get_event_participants(
-    event_id=event_id,
-    partner_id=partner_id,
-    participation_type=participation_type,
-    limit=limit
-),
+        "data": event_repository.get_event_participants(
+            event_id=event_id,
+            partner_id=partner_id,
+            participation_type=participation_type,
+            limit=limit,
+        ),
     }
 
 
@@ -463,11 +524,15 @@ def find_partner_matches(
         partner health, overall match score, and recommendation.
     """
 
+    denied = check_domain(Domain.EVENT)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "find_partner_matches",
-        "data": repository.find_partner_matches(
+        "data": event_repository.find_partner_matches(
             partner_id=partner_id,
             market_id=market_id,
             region=region,
@@ -505,11 +570,15 @@ def explain_partner_match(
         recommendation, and match status.
     """
 
+    denied = check_domain(Domain.EVENT)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "explain_partner_match",
-        "data": repository.explain_partner_match(
+        "data": event_repository.explain_partner_match(
             match_id=match_id,
             partner_id=partner_id,
             market_id=market_id,
@@ -558,11 +627,15 @@ def search_gtm_opportunities(
         priority, recommended action, and opportunity status.
     """
 
+    denied = check_domain(Domain.GTM)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "search_gtm_opportunities",
-        "data": repository.search_gtm_opportunities(
+        "data": gtm_repository.search_gtm_opportunities(
             partner_id=partner_id,
             market_id=market_id,
             region=region,
@@ -615,11 +688,15 @@ def get_gtm_recommendations(
         recommended timeframe, and recommendation status.
     """
 
+    denied = check_domain(Domain.GTM)
+    if denied:
+        return denied
+
     return {
         "source": "snowflake",
         "source_type": "structured",
         "tool": "get_gtm_recommendations",
-        "data": repository.get_gtm_recommendations(
+        "data": gtm_repository.get_gtm_recommendations(
             partner_id=partner_id,
             market_id=market_id,
             region=region,

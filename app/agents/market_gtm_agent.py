@@ -68,8 +68,8 @@ class MarketGtmAgent(BaseAgent):
             "technologies": serialize(technologies),
         }
 
-    async def run(self, question: str) -> str:
-        async with MCPClient(self.mcp_url) as client:
+    async def run(self, question: str, jwt: str) -> str:
+        async with MCPClient(self.mcp_url, auth_token=jwt) as client:
             records = await self._gather_data(client)
 
         if not records:

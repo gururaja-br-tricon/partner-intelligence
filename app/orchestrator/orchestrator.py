@@ -18,17 +18,20 @@ class Orchestrator:
         self.last_route: list[str] = []
         self.last_cache_hit: bool = False
 
-    def _build_agent(self, name: str):
+    def _build_agent(self, name: str, jwt: str):
         if name == "partner_growth":
-            return PartnerGrowthAgent(
-                self.llm, self.mcp_url, context=self.context
-            )
+            return PartnerGrowthAgent(self.llm, self.mcp_url, context=self.context)
         if name == "market_gtm":
             return MarketGtmAgent(self.llm, self.mcp_url, context=self.context)
         raise ValueError(f"Unknown agent: {name}")
 
-    async def answer(self, question: str) -> str:
-        cached = self.cache.get(question)
+    async def answer(self, question: str, jwt: str) -> str:
+        # Cache key MUST include the caller's identity/roles, not just the
+        # question text. Two users with different access asking the same
+        # question must not receive each other's cached answer — that was
+        # a cross-role data leak independent of the JWT plumbing itself.
+        cache_key = self._cache_key(question, jwt)
+        cached = self.cache.get(cache_key)
 
         if cached is not None:
             self.last_cache_hit = True
@@ -39,7 +42,7 @@ class Orchestrator:
         agents = self.intent_classifier.classify(question)
         self.last_route = agents
 
-        tasks = [self._build_agent(a).run(question) for a in agents]
+        tasks = [self._build_agent(a, jwt).run(question, jwt) for a in agents]
 
         answers = await asyncio.gather(*tasks)
 
@@ -48,9 +51,23 @@ class Orchestrator:
         self.context.remember_user(question)
         self.context.remember_assistant(final_answer)
 
-        self.cache.put(question, final_answer)
+        # self.cache.put(cache_key, final_answer)
 
         return final_answer
+
+    @staticmethod
+    def _cache_key(question: str, jwt: str) -> str:
+        # Decode without verifying signature here — verification already
+        # happens server-side per tool call; this is only to bind the
+        # cache entry to the caller's role set, not to re-authenticate.
+        import jwt as jwt_lib
+
+        try:
+            payload = jwt_lib.decode(jwt, options={"verify_signature": False})
+            roles = ",".join(sorted(payload.get("roles", [])))
+        except Exception:
+            roles = "unknown"
+        return f"{roles}::{question}"
 
     def _merge(self, agents: list[str], answers: list[str]) -> str:
         if len(answers) == 1:
