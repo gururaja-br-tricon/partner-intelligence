@@ -13,6 +13,7 @@ class Settings:
 
         self.llm_provider = os.getenv("LLM_PROVIDER", "groq").strip().lower()
 
+        self.groq_api_key = os.getenv("GROQ_BASE_URL", "").strip()
         self.groq_api_key = os.getenv("GROQ_API_KEY", "").strip()
         self.groq_chat_model = os.getenv("GROQ_CHAT_MODEL", "openai/gpt-oss-120b")
         self.groq_embedding_model = os.getenv(

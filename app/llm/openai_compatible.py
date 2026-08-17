@@ -105,6 +105,8 @@ def qwen_provider():
 def get_provider() -> OpenAICompatibleProvider:
     from app.config import settings
 
+    print(f"Configured LLM Provider: {settings.llm_provider}")
+
     if settings.llm_provider == "qwen":
         return qwen_provider()
     return groq_provider()
