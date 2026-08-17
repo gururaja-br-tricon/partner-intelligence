@@ -80,16 +80,16 @@ class IntentClassifier:
         sections = []
         for agent in AGENT_OPTIONS:
             info = AGENT_CONTEXT[agent]
-            handles = "\n".join(f"      - {h}" for h in info["handles"])
-            questions = "\n".join(f"      - {q}" for q in info["questions"])
-            keywords = ", ".join(info["keywords"])
+            # handles = "\n".join(f"      - {h}" for h in info["handles"])
+            # questions = "\n".join(f"      - {q}" for q in info["questions"])
+            # keywords = ", ".join(info["keywords"])
             tools = ", ".join(info["tools"])
             sections.append(
                 f"  '" + agent + "':\n"
                 f"    TOOLS IT CAN USE: {tools}\n"
-                f"    FUNCTIONALITY / WHAT IT HANDLES:\n{handles}\n"
-                f"    EXAMPLE QUESTIONS IT ANSWERS:\n{questions}\n"
-                f"    TRIGGER KEYWORDS: {keywords}"
+                # f"    FUNCTIONALITY / WHAT IT HANDLES:\n{handles}\n"
+                # f"    EXAMPLE QUESTIONS IT ANSWERS:\n{questions}\n"
+                # f"    TRIGGER KEYWORDS: {keywords}"
             )
 
         return (

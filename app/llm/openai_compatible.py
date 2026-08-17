@@ -79,7 +79,7 @@ def groq_provider():
     from app.config import settings
 
     return OpenAICompatibleProvider(
-        base_url="https://api.groq.com/openai/v1",
+        base_url=settings.groq_api_url,
         api_key=settings.groq_api_key,
         chat_model=settings.groq_chat_model,
         embedding_model=settings.groq_embedding_model,

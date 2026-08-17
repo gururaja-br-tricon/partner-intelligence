@@ -38,6 +38,7 @@ class Orchestrator:
 
         agents = self.intent_classifier.classify(question)
         self.last_route = agents
+        print(f"Found the agents: {agents}")
 
         tasks = [self._build_agent(a).run(question) for a in agents]
 
