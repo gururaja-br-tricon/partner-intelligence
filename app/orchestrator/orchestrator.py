@@ -28,13 +28,13 @@ class Orchestrator:
         raise ValueError(f"Unknown agent: {name}")
 
     async def answer(self, question: str) -> str:
-        cached = self.cache.get(question)
+        # cached = self.cache.get(question)
 
-        if cached is not None:
-            self.last_cache_hit = True
-            return cached
+        # if cached is not None:
+        #     self.last_cache_hit = True
+        #     return cached
 
-        self.last_cache_hit = False
+        # self.last_cache_hit = False
 
         agents = self.intent_classifier.classify(question)
         self.last_route = agents

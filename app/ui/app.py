@@ -62,9 +62,9 @@ with st.sidebar:
     if st.button("Reset conversation", use_container_width=True):
         reset_conversation()
 
-    st.divider()
-    st.subheader("Diagnostics")
-    metadata = st.empty()
+    # st.divider()
+    # st.subheader("Diagnostics")
+    # metadata = st.empty()
 
 for message in st.session_state["messages"]:
     with st.chat_message(message["role"]):
@@ -101,10 +101,10 @@ if prompt:
 
     st.session_state["messages"].append({"role": "assistant", "content": answer})
 
-with st.sidebar:
-    cache_stats = orchestrator.cache.stats()
-    metadata.info(
-        f"Cache entries: {cache_stats['entries']}\n\n"
-        f"Hits: {cache_stats['hits']}\n\n"
-        f"Misses: {cache_stats['misses']}"
-)
+# with st.sidebar:
+#     cache_stats = orchestrator.cache.stats()
+#     metadata.info(
+#         f"Cache entries: {cache_stats['entries']}\n\n"
+#         f"Hits: {cache_stats['hits']}\n\n"
+#         f"Misses: {cache_stats['misses']}"
+#     )
