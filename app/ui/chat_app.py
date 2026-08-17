@@ -77,7 +77,7 @@ def login_screen() -> None:
     # admin_app.py runs as a SEPARATE streamlit process on its own port —
     # adjust ADMIN_APP_URL to match wherever you actually run it.
     ADMIN_APP_URL = os.environ.get("ADMIN_APP_URL", "http://localhost:8502")
-    st.link_button("Create new user (admin)", ADMIN_APP_URL)
+    st.link_button("Create/Update new user (Admin)", ADMIN_APP_URL)
 
 
 @st.cache_resource
