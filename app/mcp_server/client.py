@@ -12,7 +12,7 @@ class MCPClient:
     def __init__(self, server_url=None):
         self.server_url = server_url or os.getenv(
             "MCP_SERVER_URL",
-            "http://127.0.0.1:8001/mcp",
+            "http://127.0.0.1:8000/mcp",
         )
 
         self._http_client = None

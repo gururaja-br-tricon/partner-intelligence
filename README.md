@@ -205,7 +205,13 @@ The MCP layer is responsible for exposing that functionality as an MCP tool.
 Start the Streamable HTTP server from the project root:
 
 ```powershell
-python app/mcp/http_server.py
+python -m app.mcp_server.http_server
+```
+
+For Linux
+
+```bash
+python -m app.mcp_server.http_server
 ```
 
 The server runs on:
@@ -229,7 +235,7 @@ Keep the MCP server running in one terminal.
 Then, from another terminal:
 
 ```powershell
-python app/mcp/test_mcp_client.py
+python -m app.mcp_server.test_mcp_client
 ```
 
 The test client:
@@ -239,6 +245,26 @@ The test client:
 3. Discovers available tools.
 4. Calls `search_partners`.
 5. Prints the returned Snowflake data.
+
+---
+
+## Running the Streamlit App
+
+Start the Streamlit chat UI from the project root:
+
+```powershell
+python -m streamlit run app/ui/app.py
+```
+
+For Linux:
+
+```bash
+.venv/bin/streamlit run app/ui/app.py
+```
+
+Open the URL shown in the terminal (default `http://localhost:8501`) and use the
+3 demo-question buttons to exercise the orchestrator end-to-end (intent routing,
+per-agent answers, merge, and cache-hit visualization).
 
 ---
 

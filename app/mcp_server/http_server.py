@@ -1,12 +1,10 @@
 import uvicorn
 
-from app.mcp.server import mcp
+from app.mcp_server.server import mcp
 
 if __name__ == "__main__":
-    uvicorn.run(
-        mcp.streamable_http_app(
-            streamable_http_path="/mcp"
-        ),
-        host="0.0.0.0",
-        port=8001,
-    )
+    host = "127.0.0.1"
+    port = 8000
+    print("Server starting at: http://{host}:{port}")
+    uvicorn.run(mcp.streamable_http_app(streamable_http_path="/mcp"), host=host, port=port)
+    print("Server started at: http://{host}:{port}")

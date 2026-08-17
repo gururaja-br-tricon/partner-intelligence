@@ -1,6 +1,6 @@
 import asyncio
 
-from app.mcp.client import MCPClient
+from app.mcp_server.client import MCPClient
 
 
 async def main():
