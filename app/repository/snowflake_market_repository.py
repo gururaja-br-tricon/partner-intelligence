@@ -49,51 +49,145 @@ class SnowflakeMarketRepository:
     def close(self):
         self.connection.close()
 
+    # ============================================================================
+    # CONSOLIDATED METHOD: search_markets now includes intelligence filters
+    # REMOVES: get_market_intelligence (old separate method)
+    # ============================================================================
     def search_markets(
         self,
         market_name=None,
         market_category=None,
         region=None,
         technology=None,
+        # NEW: Intelligence filters (from old get_market_intelligence)
+        market_id=None,
+        country=None,
+        industry=None,
+        analysis_year=None,
+        demand_level=None,
+        growth_level=None,
+        include_intelligence=False,  # Flag to add intelligence columns
         limit=QUERY_LIMIT,
     ):
+        """
+        Search markets with optional intelligence data.
+        
+        This method consolidates search_markets + get_market_intelligence.
+        If include_intelligence=True or intelligence filters are provided,
+        it joins MARKET_INTELLIGENCE and returns analytical metrics.
+        """
+        
+        has_intel_filters = any([
+            market_id is not None,
+            country is not None,
+            industry is not None,
+            analysis_year is not None,
+            demand_level is not None,
+            growth_level is not None,
+        ])
+
         query = f"""
             SELECT DISTINCT
-                market_id,
-                market_name,
-                market_category,
-                description,
-                primary_technologies,
-                market_priority,
-                target_regions
-            FROM {MARKETS}
-            WHERE 1 = 1
+                m.market_id,
+                m.market_name,
+                m.market_category,
+                m.description,
+                m.primary_technologies,
+                m.market_priority,
+                m.target_regions
         """
+
+        # Add intelligence columns if requested
+        if include_intelligence or has_intel_filters:
+            query += """
+                , mi.market_intelligence_id,
+                mi.analysis_year,
+                mi.market_size_billion,
+                mi.market_growth_pct,
+                mi.tam_billion,
+                mi.sam_billion,
+                mi.som_billion,
+                mi.demand_score,
+                mi.technology_adoption_pct,
+                mi.competitive_intensity_score,
+                mi.active_partner_count,
+                mi.active_opportunity_count,
+                mi.demand_level,
+                mi.growth_level
+            """
+
+        query += f"""
+            FROM {MARKETS} m
+        """
+
+        # Add intelligence join if needed
+        if include_intelligence or has_intel_filters:
+            query += f"""
+            LEFT JOIN {MARKET_INTELLIGENCE} mi
+                ON m.market_id = mi.market_id
+            """
+
+        query += " WHERE 1 = 1"
 
         parameters = []
 
+        # Original market definition filters
         if market_name:
-            query += " AND market_name = %s"
+            query += " AND m.market_name = %s"
             parameters.append(market_name)
 
         if market_category:
-            query += " AND market_category = %s"
+            query += " AND m.market_category = %s"
             parameters.append(market_category)
 
         if region:
-            query += " AND target_regions ILIKE %s"
+            query += " AND m.target_regions ILIKE %s"
             parameters.append(f"%{region}%")
 
         if technology:
-            query += " AND primary_technologies ILIKE %s"
+            query += " AND m.primary_technologies ILIKE %s"
             parameters.append(f"%{technology}%")
 
+        # NEW: Intelligence filters
+        if market_id:
+            query += " AND m.market_id = %s"
+            parameters.append(market_id)
+
+        if country:
+            query += " AND mi.country = %s"
+            parameters.append(country)
+
+        if industry:
+            query += " AND mi.industry = %s"
+            parameters.append(industry)
+
+        if analysis_year is not None:
+            query += " AND mi.analysis_year = %s"
+            parameters.append(analysis_year)
+
+        if demand_level:
+            query += " AND mi.demand_level = %s"
+            parameters.append(demand_level)
+
+        if growth_level:
+            query += " AND mi.growth_level = %s"
+            parameters.append(growth_level)
+
         query += """
-            ORDER BY market_name
-            LIMIT %s
+            ORDER BY
         """
 
-        parameters.append(limit)
+        if include_intelligence or has_intel_filters:
+            query += """
+                mi.market_growth_pct DESC,
+                mi.demand_score DESC
+            """
+        else:
+            query += " m.market_name"
+
+        if limit:
+            query += " LIMIT %s"
+            parameters.append(limit)
 
         cursor = self.connection.cursor(snowflake.connector.DictCursor)
 
@@ -101,8 +195,9 @@ class SnowflakeMarketRepository:
             cursor.execute(query, parameters)
             rows = cursor.fetchall()
 
-            return [
-                {
+            result = []
+            for row in rows:
+                market_dict = {
                     "market_id": row["MARKET_ID"],
                     "market_name": row["MARKET_NAME"],
                     "market_category": row["MARKET_CATEGORY"],
@@ -111,128 +206,36 @@ class SnowflakeMarketRepository:
                     "market_priority": row["MARKET_PRIORITY"],
                     "target_regions": row["TARGET_REGIONS"],
                 }
-                for row in rows
-            ]
+
+                # Add intelligence data if available
+                if include_intelligence or has_intel_filters:
+                    market_dict.update({
+                        "market_intelligence_id": row["MARKET_INTELLIGENCE_ID"],
+                        "analysis_year": row["ANALYSIS_YEAR"],
+                        "market_size_billion": row["MARKET_SIZE_BILLION"],
+                        "market_growth_pct": row["MARKET_GROWTH_PCT"],
+                        "tam_billion": row["TAM_BILLION"],
+                        "sam_billion": row["SAM_BILLION"],
+                        "som_billion": row["SOM_BILLION"],
+                        "demand_score": row["DEMAND_SCORE"],
+                        "technology_adoption_pct": row["TECHNOLOGY_ADOPTION_PCT"],
+                        "competitive_intensity_score": row["COMPETITIVE_INTENSITY_SCORE"],
+                        "active_partner_count": row["ACTIVE_PARTNER_COUNT"],
+                        "active_opportunity_count": row["ACTIVE_OPPORTUNITY_COUNT"],
+                        "demand_level": row["DEMAND_LEVEL"],
+                        "growth_level": row["GROWTH_LEVEL"],
+                    })
+
+                result.append(market_dict)
+
+            return result
 
         finally:
             cursor.close()
 
-    def get_market_intelligence(
-        self,
-        market_id=None,
-        region=None,
-        country=None,
-        industry=None,
-        technology=None,
-        analysis_year=None,
-        demand_level=None,
-        growth_level=None,
-        limit=QUERY_LIMIT,
-    ):
-        query = f"""
-            SELECT
-                market_intelligence_id,
-                market_id,
-                market_name,
-                analysis_year,
-                region,
-                country,
-                industry,
-                technology,
-                market_size_billion,
-                market_growth_pct,
-                tam_billion,
-                sam_billion,
-                som_billion,
-                demand_score,
-                technology_adoption_pct,
-                competitive_intensity_score,
-                active_partner_count,
-                active_opportunity_count,
-                demand_level,
-                growth_level
-            FROM {MARKET_INTELLIGENCE}
-            WHERE 1 = 1
-        """
-
-        parameters = []
-
-        if market_id:
-            query += " AND market_id = %s"
-            parameters.append(market_id)
-
-        if region:
-            query += " AND region = %s"
-            parameters.append(region)
-
-        if country:
-            query += " AND country = %s"
-            parameters.append(country)
-
-        if industry:
-            query += " AND industry = %s"
-            parameters.append(industry)
-
-        if technology:
-            query += " AND technology = %s"
-            parameters.append(technology)
-
-        if analysis_year is not None:
-            query += " AND analysis_year = %s"
-            parameters.append(analysis_year)
-
-        if demand_level:
-            query += " AND demand_level = %s"
-            parameters.append(demand_level)
-
-        if growth_level:
-            query += " AND growth_level = %s"
-            parameters.append(growth_level)
-
-        query += """
-            ORDER BY
-                market_growth_pct DESC,
-                demand_score DESC
-            LIMIT %s
-        """
-
-        parameters.append(limit)
-
-        cursor = self.connection.cursor(snowflake.connector.DictCursor)
-
-        try:
-            cursor.execute(query, parameters)
-            rows = cursor.fetchall()
-
-            return [
-                {
-                    "market_intelligence_id": row["MARKET_INTELLIGENCE_ID"],
-                    "market_id": row["MARKET_ID"],
-                    "market_name": row["MARKET_NAME"],
-                    "analysis_year": row["ANALYSIS_YEAR"],
-                    "region": row["REGION"],
-                    "country": row["COUNTRY"],
-                    "industry": row["INDUSTRY"],
-                    "technology": row["TECHNOLOGY"],
-                    "market_size_billion": row["MARKET_SIZE_BILLION"],
-                    "market_growth_pct": row["MARKET_GROWTH_PCT"],
-                    "tam_billion": row["TAM_BILLION"],
-                    "sam_billion": row["SAM_BILLION"],
-                    "som_billion": row["SOM_BILLION"],
-                    "demand_score": row["DEMAND_SCORE"],
-                    "technology_adoption_pct": row["TECHNOLOGY_ADOPTION_PCT"],
-                    "competitive_intensity_score": row["COMPETITIVE_INTENSITY_SCORE"],
-                    "active_partner_count": row["ACTIVE_PARTNER_COUNT"],
-                    "active_opportunity_count": row["ACTIVE_OPPORTUNITY_COUNT"],
-                    "demand_level": row["DEMAND_LEVEL"],
-                    "growth_level": row["GROWTH_LEVEL"],
-                }
-                for row in rows
-            ]
-
-        finally:
-            cursor.close()
-
+    # ============================================================================
+    # KEEP: compare_markets (distinct use case, still used for side-by-side analysis)
+    # ============================================================================
     def compare_markets(
         self,
         market_ids,
@@ -241,6 +244,10 @@ class SnowflakeMarketRepository:
         technology=None,
         analysis_year=None,
     ):
+        """
+        Compare multiple markets side-by-side using intelligence data.
+        Still a separate method because it has a distinct input pattern (list of IDs).
+        """
         if not market_ids:
             return []
 
@@ -248,48 +255,50 @@ class SnowflakeMarketRepository:
 
         query = f"""
             SELECT
-                market_id,
-                market_name,
-                analysis_year,
-                region,
-                industry,
-                technology,
-                market_size_billion,
-                market_growth_pct,
-                tam_billion,
-                sam_billion,
-                som_billion,
-                demand_score,
-                technology_adoption_pct,
-                competitive_intensity_score,
-                active_partner_count,
-                active_opportunity_count
-            FROM {MARKET_INTELLIGENCE}
-            WHERE market_id IN ({placeholders})
+                m.market_id,
+                m.market_name,
+                mi.analysis_year,
+                mi.region,
+                mi.industry,
+                mi.technology,
+                mi.market_size_billion,
+                mi.market_growth_pct,
+                mi.tam_billion,
+                mi.sam_billion,
+                mi.som_billion,
+                mi.demand_score,
+                mi.technology_adoption_pct,
+                mi.competitive_intensity_score,
+                mi.active_partner_count,
+                mi.active_opportunity_count
+            FROM {MARKETS} m
+            LEFT JOIN {MARKET_INTELLIGENCE} mi
+                ON m.market_id = mi.market_id
+            WHERE m.market_id IN ({placeholders})
         """
 
         parameters = list(market_ids)
 
         if region:
-            query += " AND region = %s"
+            query += " AND mi.region = %s"
             parameters.append(region)
 
         if industry:
-            query += " AND industry = %s"
+            query += " AND mi.industry = %s"
             parameters.append(industry)
 
         if technology:
-            query += " AND technology = %s"
+            query += " AND mi.technology = %s"
             parameters.append(technology)
 
         if analysis_year is not None:
-            query += " AND analysis_year = %s"
+            query += " AND mi.analysis_year = %s"
             parameters.append(analysis_year)
 
         query += """
             ORDER BY
-                market_growth_pct DESC,
-                demand_score DESC
+                mi.market_growth_pct DESC,
+                mi.demand_score DESC
         """
 
         cursor = self.connection.cursor(snowflake.connector.DictCursor)
@@ -323,10 +332,19 @@ class SnowflakeMarketRepository:
         finally:
             cursor.close()
 
+
 if __name__ == "__main__":
     repository = SnowflakeMarketRepository()
 
+    # Old way: two separate calls
+    # result1 = repository.search_markets(market_name="Cloud")
+    # result2 = repository.get_market_intelligence(region="EMEA", analysis_year=2026)
+
+    # New way: one call with intelligence included
     result = repository.search_markets(
+        technology="AI",
+        include_intelligence=True,
+        analysis_year=2026,
         limit=5
     )
 

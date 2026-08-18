@@ -193,6 +193,10 @@ class SnowflakePartnerRepository:
             "classifications": self.get_classifications(partner_id),
         }
 
+    # ============================================================================
+    # CONSOLIDATED METHOD: search_partners now includes performance filters
+    # REMOVES: search_partner_growth (old separate method)
+    # ============================================================================
     def search_partners(
         self,
         headquarters_state=None,
@@ -205,8 +209,20 @@ class SnowflakePartnerRepository:
         program_name=None,
         partner_tier=None,
         classification=None,
+        # NEW: Performance/growth filters (from old search_partner_growth)
+        min_revenue_growth_pct=None,
+        min_pipeline_growth_pct=None,
+        min_health_score=None,
+        performance_status=None,
+        performance_year=None,
         limit=QUERY_LIMIT,
     ):
+        """
+        Search partners with optional performance filtering.
+        
+        This method consolidates search_partners + search_partner_growth.
+        If performance filters are provided, it joins PARTNER_PERFORMANCE.
+        """
         query = f"""
             SELECT DISTINCT
                 p.partner_id,
@@ -220,6 +236,29 @@ class SnowflakePartnerRepository:
                 p.headquarters_country,
                 p.headquarters_state,
                 p.headquarters_city
+        """
+        
+        # Add performance columns to SELECT if performance filters are requested
+        has_perf_filters = any([
+            min_revenue_growth_pct is not None,
+            min_pipeline_growth_pct is not None,
+            min_health_score is not None,
+            performance_status is not None,
+            performance_year is not None,
+        ])
+        
+        if has_perf_filters:
+            query += """
+                , perf.performance_year,
+                perf.revenue,
+                perf.revenue_growth_pct,
+                perf.pipeline_value,
+                perf.pipeline_growth_pct,
+                perf.partner_health_score,
+                perf.performance_status
+            """
+        
+        query += f"""
             FROM {PARTNER_MASTER} p
             LEFT JOIN {PARTNER_CAPABILITIES} c
                 ON p.partner_id = c.partner_id
@@ -227,11 +266,20 @@ class SnowflakePartnerRepository:
                 ON p.partner_id = pr.partner_id
             LEFT JOIN {PARTNER_CLASSIFICATIONS} cl
                 ON p.partner_id = cl.partner_id
-            WHERE 1 = 1
         """
+        
+        # Add performance join only if needed
+        if has_perf_filters:
+            query += f"""
+            LEFT JOIN {PARTNER_PERFORMANCE} perf
+                ON p.partner_id = perf.partner_id
+            """
+        
+        query += " WHERE 1 = 1"
 
         parameters = []
 
+        # Original filters
         if headquarters_state:
             query += " AND p.headquarters_state = %s"
             parameters.append(headquarters_state)
@@ -272,6 +320,41 @@ class SnowflakePartnerRepository:
             query += " AND cl.classification = %s"
             parameters.append(classification)
 
+        # NEW: Performance filters
+        if min_revenue_growth_pct is not None:
+            query += " AND perf.revenue_growth_pct >= %s"
+            parameters.append(min_revenue_growth_pct)
+
+        if min_pipeline_growth_pct is not None:
+            query += " AND perf.pipeline_growth_pct >= %s"
+            parameters.append(min_pipeline_growth_pct)
+
+        if min_health_score is not None:
+            query += " AND perf.partner_health_score >= %s"
+            parameters.append(min_health_score)
+
+        if performance_status:
+            query += " AND perf.performance_status = %s"
+            parameters.append(performance_status)
+
+        if performance_year is not None:
+            query += " AND perf.performance_year = %s"
+            parameters.append(performance_year)
+
+        query += """
+            ORDER BY
+        """
+        
+        # Smart ordering: if performance filters present, prioritize performance metrics
+        if has_perf_filters:
+            query += """
+                perf.revenue_growth_pct DESC,
+                perf.pipeline_growth_pct DESC,
+                perf.partner_health_score DESC
+            """
+        else:
+            query += " p.partner_name"
+
         if limit:
             query += " LIMIT %s"
             parameters.append(limit)
@@ -282,8 +365,9 @@ class SnowflakePartnerRepository:
             cursor.execute(query, parameters)
             rows = cursor.fetchall()
 
-            return [
-                {
+            result = []
+            for row in rows:
+                partner_dict = {
                     "partner_id": row["PARTNER_ID"],
                     "partner_name": row["PARTNER_NAME"],
                     "status": row["STATUS"],
@@ -296,11 +380,28 @@ class SnowflakePartnerRepository:
                     "headquarters_state": row["HEADQUARTERS_STATE"],
                     "headquarters_city": row["HEADQUARTERS_CITY"],
                 }
-                for row in rows
-            ]
+                
+                # Add performance data if available
+                if has_perf_filters:
+                    partner_dict.update({
+                        "performance_year": row["PERFORMANCE_YEAR"],
+                        "revenue": row["REVENUE"],
+                        "revenue_growth_pct": row["REVENUE_GROWTH_PCT"],
+                        "pipeline_value": row["PIPELINE_VALUE"],
+                        "pipeline_growth_pct": row["PIPELINE_GROWTH_PCT"],
+                        "partner_health_score": row["PARTNER_HEALTH_SCORE"],
+                        "performance_status": row["PERFORMANCE_STATUS"],
+                    })
+                
+                result.append(partner_dict)
+            
+            return result
         finally:
             cursor.close()
 
+    # ============================================================================
+    # KEEP: get_partner_performance (used by get_partner_profile for full history)
+    # ============================================================================
     def get_partner_performance(self, partner_id):
         query = f"""
             SELECT
@@ -367,104 +468,21 @@ class SnowflakePartnerRepository:
         finally:
             cursor.close()
 
-    def search_partner_growth(
-        self,
-        min_revenue_growth_pct=None,
-        min_pipeline_growth_pct=None,
-        min_health_score=None,
-        performance_status=None,
-        performance_year=None,
-        limit=QUERY_LIMIT,
-    ):
-        query = f"""
-            SELECT
-                partner_id,
-                performance_year,
-                revenue,
-                revenue_growth_pct,
-                employee_count,
-                employee_growth_pct,
-                customer_count,
-                retention_rate_pct,
-                pipeline_value,
-                pipeline_growth_pct,
-                opportunities_created,
-                opportunities_won,
-                opportunities_lost,
-                win_rate_pct,
-                partner_health_score,
-                performance_status
-            FROM {PARTNER_PERFORMANCE}
-            WHERE 1 = 1
-        """
-
-        parameters = []
-
-        if min_revenue_growth_pct is not None:
-            query += " AND revenue_growth_pct >= %s"
-            parameters.append(min_revenue_growth_pct)
-
-        if min_pipeline_growth_pct is not None:
-            query += " AND pipeline_growth_pct >= %s"
-            parameters.append(min_pipeline_growth_pct)
-
-        if min_health_score is not None:
-            query += " AND partner_health_score >= %s"
-            parameters.append(min_health_score)
-
-        if performance_status:
-            query += " AND performance_status = %s"
-            parameters.append(performance_status)
-
-        if performance_year is not None:
-            query += " AND performance_year = %s"
-            parameters.append(performance_year)
-
-        query += """
-            ORDER BY
-                revenue_growth_pct DESC,
-                pipeline_growth_pct DESC,
-                partner_health_score DESC
-            LIMIT %s
-        """
-
-        parameters.append(limit)
-
-        cursor = self.connection.cursor(snowflake.connector.DictCursor)
-
-        try:
-            cursor.execute(query, parameters)
-            rows = cursor.fetchall()
-
-            return [
-                {
-                    "partner_id": row["PARTNER_ID"],
-                    "performance_year": row["PERFORMANCE_YEAR"],
-                    "revenue": row["REVENUE"],
-                    "revenue_growth_pct": row["REVENUE_GROWTH_PCT"],
-                    "employee_count": row["EMPLOYEE_COUNT"],
-                    "employee_growth_pct": row["EMPLOYEE_GROWTH_PCT"],
-                    "customer_count": row["CUSTOMER_COUNT"],
-                    "retention_rate_pct": row["RETENTION_RATE_PCT"],
-                    "pipeline_value": row["PIPELINE_VALUE"],
-                    "pipeline_growth_pct": row["PIPELINE_GROWTH_PCT"],
-                    "opportunities_created": row["OPPORTUNITIES_CREATED"],
-                    "opportunities_won": row["OPPORTUNITIES_WON"],
-                    "opportunities_lost": row["OPPORTUNITIES_LOST"],
-                    "win_rate_pct": row["WIN_RATE_PCT"],
-                    "partner_health_score": row["PARTNER_HEALTH_SCORE"],
-                    "performance_status": row["PERFORMANCE_STATUS"],
-                }
-                for row in rows
-            ]
-        finally:
-            cursor.close()
-
 
 if __name__ == "__main__":
     repository = SnowflakePartnerRepository()
 
-    result = repository.search_partners()
+    # Old way: two separate calls
+    # result1 = repository.search_partners(industry="tech")
+    # result2 = repository.search_partner_growth(min_revenue_growth_pct=10)
+
+    # New way: one call with all filters
+    result = repository.search_partners(
+        industry="Enterprise Software",
+        min_revenue_growth_pct=10,
+        min_pipeline_growth_pct=5,
+        limit=10
+    )
 
     for row in result:
         print(row)
